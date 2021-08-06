@@ -1,0 +1,14 @@
+<h2>login landing</h2>
+<form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
+
+    <div>
+      <label for="name">
+        Name
+      </label>
+      <input id="name" type="text" formControlName="name">
+    </div>
+
+    <button class="button" type="submit">Login</button>
+  
+  </form>
+  

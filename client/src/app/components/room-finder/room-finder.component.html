@@ -1,0 +1,14 @@
+<h2>Room finder</h2>
+<form [formGroup]="roomFinderForm" (ngSubmit)="onSubmit()">
+
+    <div>
+      <label for="roomName">
+        Room Name
+      </label>
+      <input id="roomName" type="text" formControlName="roomName">
+    </div>
+
+    <button class="button" type="submit">Join</button>
+  
+  </form>
+  
