@@ -2,6 +2,7 @@ import { Injectable, OnInit } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { shareReplay } from 'rxjs/operators';
+import { BaseApiUrl } from '../../urls';
 
 type Header = { [header: string]: string | string[]; };
 
@@ -42,6 +43,6 @@ export class LoginBackendService implements OnInit  {
 
   }
 
-  private readonly url = 'http://localhost:8080';
+  private readonly url = BaseApiUrl;
   private headers : Header = {}
 }

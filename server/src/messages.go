@@ -1,40 +1,13 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
+	"log"
 	"net/http"
 
-	socketio "github.com/googollee/go-socket.io"
 	"github.com/gorilla/websocket"
 )
-
-//Define upgrade policy.
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin:     checkOrigin,
-}
-
-//Ugrade policty from http request to websocket, to be defined
-func checkOrigin(r *http.Request) bool {
-	//For example: Check in a blacklist if the address is present
-	//if blacklist_check(r.RemoteAddr) { return false }
-	// check if origin header is correct url
-	// if isBlackListed(r) {
-	// 	return false
-	// }
-	//origin := r.Header.Get("Origin")
-	return true
-	//if !ENV.Public && origin == "null" {
-	//	return true
-	//}
-	//
-	//if origin != "" {
-	//	if origin == "http://alexmccallum.me" || origin == "file://" {
-	//		return true
-	//	}
-	//}
-	//return false
-}
 
 type MessageType string
 
@@ -60,7 +33,24 @@ type Message struct {
 	Date     int64  `json:"date,omitempty"`
 }
 
-func newOutMessage(userName string, msg string) Message {
+type JoinOutMessage struct {
+	Username    string   `json:"name,omitempty"`
+	JoinMessage string   `json:"joinMessage,omitempty"`
+	Messages    []string `json:"messages,omitempty"`
+	Date        int64    `json:"date,omitempty"`
+	Success     bool     `json:"success,omitempty"`
+}
+
+type JoinInMessage struct {
+	UserId   string `json:"name,omitempty"`
+	RoomName string `json:"roomName,omitempty"`
+}
+
+func newJoinOutMessage(username string, messages []string, success bool) JoinOutMessage {
+	return JoinOutMessage{username, username + " has joined", messages, jsTimeStamp(), success}
+}
+
+func newMessage(userName string, msg string) Message {
 	return Message{userName, msg, jsTimeStamp()}
 }
 
@@ -109,6 +99,7 @@ func newOutMessage(userName string, msg string) Message {
 //	}
 //	return err
 //}
+
 //
 //func processLeave(conn *websocket.Conn) (err error) {
 //	if token, ok := CONNECTIONS[conn]; ok {
@@ -167,27 +158,22 @@ func newOutMessage(userName string, msg string) Message {
 //	return err
 //}
 //
-//func sendMessage(userToken Token, msg OutMessage) (err error) {
-//	if userOut, ok := USERS[userToken]; ok {
-//		var out []byte
-//		out, err = json.Marshal(msg)
-//		if err != nil { // programming error, can't marshall type
-//			log.Println("Error - connHandler - MarshalError:", err)
-//			return err
-//		}
-//		if userOut.conn == nil {
-//			log.Println("Error - connHandler - Programmer error, user conn not properly set")
-//			return UserConnInvalid
-//		}
-//		if err = userOut.conn.WriteMessage(1, out); err != nil {
-//			log.Println("Error - connHandler - WriteMessage Response:", err)
-//			return err
-//		}
-//	} else {
-//		return UserNotFoundError
-//	}
-//	return err
-//}
+
+func sendMessage(conn *websocket.Conn, marshalToJson interface{}) (err error) {
+	if conn == nil {
+		log.Println("Error - sendMessage - Programmer error, user conn not properly set")
+		return UserConnInvalid
+	}
+	out, err := json.Marshal(marshalToJson)
+	if err != nil {
+		return err
+	}
+	if err = conn.WriteMessage(1, out); err != nil {
+		log.Println("Error - sendMessage - WriteMessage Response:", err)
+		return err
+	}
+	return nil
+}
 
 func closeConnAndRemoveData(conn *websocket.Conn) (err error) {
 	if token, ok := CONNECTIONS[conn]; ok {
@@ -238,39 +224,15 @@ func forceLeave(conn *websocket.Conn) (err error) {
 //type loadUserRequest struct {
 //	UserId string `json:"userId"`
 //}
-const baseNamespace = "/"
 
 // https://github.com/googollee/go-socket.io
-func SetupSocketIoServer() *socketio.Server {
-	server := socketio.NewServer(nil)
-	// join
-	server.OnConnect(baseNamespace, func(c socketio.Conn) error {
-		return onConnect(server, c)
-	})
-	server.OnDisconnect(baseNamespace, func(c socketio.Conn, s string) {
-		onDisconnect(server, c, s)
-	})
-
-	server.OnEvent(baseNamespace, "message", func(s socketio.Conn, msg Message) {
-		onMessage(server, s, msg)
-	})
-	server.OnEvent(baseNamespace, "leave", func(s socketio.Conn, msg Message) {
-		onLeave(server, s, msg)
-	})
-	server.OnEvent(baseNamespace, "connect_error", func(s socketio.Conn, msg string) {
-		Log(msg)
-	})
-	//server.OnEvent(baseNamespace, "join", func(s socketio.Conn, msg Message) {
-	//	onJoin(server, s, msg)
-	//})
-	return server
-}
-
-func onMessage(server *socketio.Server, s socketio.Conn, msg Message) Message {
-	Log(msg.Message)
-	s.SetContext(msg)
-	return msg
-}
+//func SetupSocketIoServer() *socketio.Server {
+//
+//	//server.OnEvent(baseNamespace, "join", func(s socketio.Conn, msg Message) {
+//	//	onJoin(server, s, msg)
+//	//})
+//	return server
+//}
 
 //func onJoin(server *socketio.Server, s socketio.Conn, msg Message) Message {
 //	token := msg.Message
@@ -286,24 +248,7 @@ func onMessage(server *socketio.Server, s socketio.Conn, msg Message) Message {
 //	return Message{}
 //}
 
-func onLeave(server *socketio.Server, s socketio.Conn, msg Message) Message {
-	return Message{}
-}
-
-func onDisconnect(server *socketio.Server, c socketio.Conn, reason string) {
-
-}
-
 // https://github.com/golang-jwt/jwt
-func onConnect(server *socketio.Server, s socketio.Conn) error {
-	Log("WHAT")
-	_, authenticated := Authenticate(s.RemoteHeader())
-	if !authenticated {
-		s.LeaveAll()
-		s.Close()
-	}
-	return nil
-}
 
 //const userIdKey = "userId"
 //
@@ -319,12 +264,7 @@ func onConnect(server *socketio.Server, s socketio.Conn) error {
 //	LogConnections()
 //}
 //
-//func SocketHandler(c *gin.Context) {
-//	socketHandlerWrapped(c.Writer, c.Request)
-//}
-//
-////Catches HTTP Requests, upgrade them if needed and let connHandler managing the connection
-//func socketHandlerWrapped(w http.ResponseWriter, r *http.Request) {
+//func SocketHandler(w http.ResponseWriter, r *http.Request) {
 //	//Upgrade a HTTP Request to get a pointer to a Conn
 //	//userId := LoadUserData(r)
 //	//if userId != "" {
@@ -354,3 +294,78 @@ func onConnect(server *socketio.Server, s socketio.Conn) error {
 //		}
 //	}
 //}
+
+func CreateSocketHandlers() *Router {
+	websocketRouter := NewRouter()
+
+	websocketRouter.OnConnection(func(c *websocket.Conn, r *http.Request) error {
+		return onConnection(c, r)
+	})
+
+	websocketRouter.On("message", func(c *websocket.Conn, dt DataType) {
+		onMessage(c, dt)
+	})
+
+	websocketRouter.On("leave", func(c *websocket.Conn, dt DataType) {
+		onLeave(c, dt)
+	})
+
+	//websocketRouter.On("join", func(c *websocket.Conn, dt DataType) {
+	//	onJoin(c, dt)
+	//})
+	return websocketRouter
+}
+
+func onMessage(c *websocket.Conn, dt DataType) {
+	var msg Message
+	err := json.Unmarshal(dt, &msg)
+	if err != nil {
+		// unmarshall data in failed
+	}
+	if user, ok := GetUser(c); ok {
+		if room, ok := ROOMS[user.roomId]; ok {
+			LogRoom(room.roomId)
+			data := newMessage(user.name, msg.Message)
+			outRaw, err := json.Marshal(data)
+			if err != nil {
+				log.Print(err)
+			}
+			broadCastMessageToRoom(room.roomId, msg, func(conn *websocket.Conn) {
+				outMsg := NetWorkLayerMessage{Typ: string(MESSAGE), Data: outRaw}
+				sendMessage(conn, outMsg)
+			})
+		}
+	}
+}
+
+func onLeave(c *websocket.Conn, dt DataType) {
+	//var leaveMessage nil
+}
+
+//func onJoin(c *websocket.Conn, dt DataType) {
+//	var inMsg JoinInMessage
+//	err := json.Unmarshal(dt, &inMsg)
+//	if err != nil {
+//		// unmarshall data in failed
+//	}
+//	if user, ok := GetUser(c); ok {
+//
+//	}
+//
+//}
+
+func onConnection(c *websocket.Conn, r *http.Request) error {
+	token, ok := r.URL.Query()["Authorization"]
+	if !ok || len(token[0]) < 1 {
+		log.Printf("invalid authorization token")
+	}
+	log.Printf(token[0])
+
+	claims, authenticated := Authenticate(token[0])
+	if authenticated {
+		AddConnection(c, claims.UserToken)
+		return nil
+	}
+
+	return errors.New("authentication failed")
+}

@@ -19,8 +19,8 @@ func JoinHandler(c *gin.Context) {
 		Log(err.Error())
 		return
 	}
-
-	jwtClaims, authenticated := Authenticate(c.Request.Header)
+	authHeader := c.Request.Header.Get("authorization")
+	jwtClaims, authenticated := Authenticate(authHeader)
 	if !authenticated {
 		return
 	}

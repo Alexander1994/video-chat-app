@@ -1,5 +1,6 @@
 
-<form [formGroup]="msgForm" (ngSubmit)="onSend()">
+<div>
+  <form [formGroup]="msgForm" (ngSubmit)="onSend()">
     <div>
     <label for="name">
         Name
@@ -9,3 +10,11 @@
 
     <button class="button" type="submit">Send</button>
 </form>
+<div *ngFor="let message of messages">
+  <div>
+    <span>{{ message.name }}: </span>
+    <span>{{ message.message }}</span>
+    <span>    {{ timeConverter($any(message.date)) }}</span>
+  </div>
+</div>
+</div>

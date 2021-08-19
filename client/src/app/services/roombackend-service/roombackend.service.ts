@@ -4,6 +4,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, Subject } from 'rxjs';
 import { AuthenticationData, LoginService, HeaderType } from '../login-service/login.service';
 import { shareReplay } from 'rxjs/operators';
+import { BaseApiUrl } from '../../urls';
 
 type Header = { [header: string]: string | string[] | null; };
 
@@ -83,6 +84,6 @@ export class RoomBackendService implements OnInit, OnDestroy {
     return this.http.delete(`${this.url}`, {...deleteHeaders, ...this.headers});
   }
   
-  private readonly url = 'http://localhost:8080/room';
+  private readonly url = BaseApiUrl + '/room';
   private headers : Header = {};
 }

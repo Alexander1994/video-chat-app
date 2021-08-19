@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"mime"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -172,7 +173,6 @@ func AddConnection(conn *websocket.Conn, token Token) (ok bool) {
 			user.conn = conn
 			USERS[token] = user
 		}
-
 	}
 
 	return ok && !connFound
@@ -183,6 +183,14 @@ func AddUser(u User) (ok bool) {
 		USERS[u.token] = u
 	}
 	return !ok
+}
+
+func GetUser(conn *websocket.Conn) (user User, ok bool) {
+	if userID, ok := CONNECTIONS[conn]; ok {
+		user, ok := USERS[userID]
+		return user, ok
+	}
+	return NullUser, false
 }
 
 func FindUser(name string) (u User, ok bool) {
@@ -253,6 +261,25 @@ func AddMsgToRoom(roomId string, msg Message) (ok bool) {
 	return ok
 }
 
+func broadCastMessageToRoom(roomId string, msg Message, onConn func(*websocket.Conn)) {
+	room := ROOMS[roomId]
+	room.messages = append(room.messages, msg)
+	ROOMS[roomId] = room
+	for _, token := range room.userTokens {
+		if user, ok := USERS[token]; ok {
+			onConn(user.conn)
+		}
+	}
+}
+
+func forEachUsertoken(userTokens []string, cb func(u User)) {
+	for _, token := range userTokens {
+		if user, ok := USERS[token]; ok {
+			cb(user)
+		}
+	}
+}
+
 func setup() {
 	USERS = make(map[Token]User)
 	ROOMS = make(map[string]Room)
@@ -267,15 +294,15 @@ func setup() {
 	AddRoom(r)
 }
 
-func CORSMiddleware() gin.HandlerFunc {
+func CORSMiddleware(allowOrigin string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Origin", allowOrigin)
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, Content-Length, X-CSRF-Token, Token, session, Origin, Host, Connection, Accept-Encoding, Accept-Language, X-Requested-With")
 
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}
 
@@ -292,8 +319,6 @@ var sslcert string = "server.crt"
  user logs in: 'connection
  user attemps join room: 'join-room' (roomId, jwt) => jwt?
  user disconnects: 'disconnect'
-
-
 */
 // https://github.com/googollee/go-socket.io/blob/master/_examples/gin-gonic/main.go
 // https://github.com/WebDevSimplified/Zoom-Clone-With-WebRTC
@@ -301,42 +326,40 @@ func main() {
 	setup()
 	isHttps := false
 	isDevelopment := true
-	loadDir := "./../../client/dist/video-app/"
+	loadDir := "../../client/dist/video-app/"
 
-	PORT := ":8080"
+	PORT := ":8000"
 	if isHttps {
 		PORT = ":443"
 	}
 
-	server := gin.New()
+	router := gin.Default()
 
 	if isDevelopment {
-		server.Use(CORSMiddleware())
+		router.Use(CORSMiddleware("http://localhost:3000"))
 	}
 
-	server.Use(static.Serve("/", static.LocalFile(loadDir, true)))
+	api := router.Group("/api")
+	{
+		api.POST("/login", LoginHandler)
+		api.POST("/room/join", JoinHandler)
+		api.POST("/room/create", CreateHandler)
+		api.DELETE("/room", RoomDeleteHandler)
+	}
 
-	server.POST("/login", LoginHandler)
-	server.POST("/room/join", JoinHandler)
-	server.POST("/room/create", CreateHandler)
-	server.DELETE("/room", RoomDeleteHandler)
+	websocketRouter := CreateSocketHandlers()
 
-	socketServer := SetupSocketIoServer()
-	go func() {
-		if err := socketServer.Serve(); err != nil {
-			log.Fatalf("socketio listen error: %s\n", err)
-		}
-	}()
-	defer socketServer.Close()
+	router.GET("/messages", func(c *gin.Context) {
+		websocketRouter.RequestReceiver(c.Writer, c.Request)
+	})
 
-	server.GET("/socket.io/*any", gin.WrapH(socketServer))
-	server.POST("/socket.io/*any", gin.WrapH(socketServer))
+	router.Use(static.Serve("/", static.LocalFile(loadDir, true)))
 
 	var err error
 	if isHttps {
-		err = server.RunTLS(PORT, sslcert, sslkey)
+		err = router.RunTLS(PORT, sslcert, sslkey)
 	} else {
-		err = server.Run(PORT)
+		err = router.Run(PORT)
 	}
 	if err != nil {
 		log.Fatal("failed run app: ", err)

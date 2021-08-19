@@ -4,8 +4,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
-	"net/http"
-	"reflect"
 	"strings"
 	"time"
 
@@ -77,7 +75,6 @@ func CreateToken(username string, userToken string) (string, error) {
 
 func GetTokenData(tokenStr string) (*JwtLoginClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenStr, &JwtLoginClaims{}, func(token *jwt.Token) (interface{}, error) {
-		fmt.Println(reflect.TypeOf(token.Method))
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 		}
@@ -91,8 +88,7 @@ func GetTokenData(tokenStr string) (*JwtLoginClaims, error) {
 	}
 }
 
-func Authenticate(header http.Header) (*JwtLoginClaims, bool) {
-	authHeader := header.Get("authorization")
+func Authenticate(authHeader string) (*JwtLoginClaims, bool) {
 	if authHeader != "" {
 		authHeaderSplit := strings.Split(authHeader, " ")
 		if len(authHeaderSplit) == 2 {

@@ -20,19 +20,20 @@ export class ChatSideBarComponent implements OnInit {
 
   constructor(private formBuilder: FormBuilder, private chatService: ChatService, private loginService:LoginService) {
     console.log("ChatSideBarComponent");
-    this.chatService.fromMessage().subscribe((msg:Message)=> {
-      this.messages.push(msg);
-    });
+    this.chatService.connect();
     this.chatService.fromConnection().subscribe(() => {
-      //let msg :Message = {
-      //  message: this.loginService.authenticationData()!.userToken
-      //};
-      //this.chatService.join(msg);
+      this.chatService.message().subscribe((msg:Message)=> {
+        console.log(msg);
+        this.messages.push(msg);
+      });
     });
+
+
   }
 
   
 timeConverter(unixTimeStamp: number) :string {
+  console.log(unixTimeStamp);
   const a = new Date(unixTimeStamp);
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const year = a.getFullYear();
@@ -55,7 +56,7 @@ timeConverter(unixTimeStamp: number) :string {
       let msg: Message = {
         message: this.msgForm.value.message
       };
-      this.chatService.message(msg);
+      this.chatService.message().next(msg);
       this.msgForm.reset();
     } else {
       console.log("unauthenticated user attempting to send data");

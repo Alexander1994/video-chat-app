@@ -1,29 +1,46 @@
 import { Injectable } from '@angular/core';
 import { Subject, Observer, Observable }  from "rxjs";
 import { AnonymousSubject } from 'rxjs/internal/Subject';
+import { LoginService } from '../login-service/login.service';
+
+import { filter, map } from 'rxjs/operators'
+
+
+export interface BasicMessage<T> {
+  type: string
+  data: T
+}
 
 @Injectable({
   providedIn: 'root'
 })
 export class WebSocketService {
-  private webSocketSubject: Subject<MessageEvent> | null = null;
+
   private connectionObserver: Observable<Event> | null = null;
 
-  constructor() {
+  private ws:WebSocket | null = null;
+
+  constructor(private loginService:LoginService) {
     console.log("WebSocketService")
 
    }
 
-  public connect(url:string): [Subject<MessageEvent>, Observable<Event>] {
-    if (!this.webSocketSubject) {
-      let ws = new WebSocket(url);
+  public connect(url:string) {
+    if (!this.ws) {
+      this.ws = new WebSocket(url);
 
-      this.webSocketSubject = this.createMessageObserver(ws);
-      this.connectionObserver = this.createConnectedSubject(ws);
+      this.connectionObserver = this.createConnectedSubject(this.ws);
       
       console.log("Successfully connected: " + url);
     }
-    return [this.webSocketSubject!, this.connectionObserver!];
+  }
+
+  public onConnect(): Observable<Event> {
+    return this.connectionObserver!;
+  }
+
+  public fromEvent<T>(msgType:string): Subject<T> {
+    return this.createMessageObserver<T>(msgType, this.ws!);
   }
 
   private createConnectedSubject(ws:WebSocket):Observable<Event> {
@@ -35,21 +52,29 @@ export class WebSocketService {
     });
   }
   
-  private createMessageObserver(ws:WebSocket): Subject<MessageEvent> {
-    let observable = new Observable((obs: Observer<MessageEvent>) => {
-      ws.onmessage = obs.next.bind(obs);
-      ws.onerror = obs.error.bind(obs);
+  private createMessageObserver<T>(msgType:string, ws:WebSocket): Subject<T> {
+    let observable = new Observable((obs: Observer<MessageEvent<any>>) => {
+      ws.onmessage =  obs.next.bind(obs);
+      ws.onerror = obs.error.bind(obs)
       ws.onclose = obs.complete.bind(obs);
       return ws.close.bind(ws);
-    });
+    }).pipe(
+      
+      map((val:MessageEvent<any>) => { console.log(val, msgType); return <BasicMessage<T>>JSON.parse(val.data)}),
+      filter((msg:BasicMessage<T>) =>  msg.type === msgType ),
+      map((data:BasicMessage<T>)=> data.data)
+    );
     let observer = {
-      next: (data: Object) => {
-        console.log(data);
+      next: (data: T) => {
+        const basicMsg:BasicMessage<T> = {
+          type: msgType,
+          data
+        }
+        console.log(basicMsg);
         console.log(ws.readyState === WebSocket.OPEN);
 
         if (ws.readyState === WebSocket.OPEN) {
-
-          ws.send(JSON.stringify(data));
+          ws.send(JSON.stringify(basicMsg));
         }
       },
       error: (err: any) => {},

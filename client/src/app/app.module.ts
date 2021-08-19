@@ -11,10 +11,6 @@ import { LoginLandingComponent } from './components/login-landing/login-landing.
 import { LobbyCreatorComponent } from './components/lobby-creator/lobby-creator.component';
 import { RoomFinderComponent } from './components/room-finder/room-finder.component';
 import { MessageRoomComponent } from './components/message-room/message-room.component';
-import { SocketIoModule, SocketIoConfig } from 'ngx-socket-io';
-
-const config: SocketIoConfig = { url: 'http://localhost:8988', options: {} };
-
 
 @NgModule({
   declarations: [
@@ -31,7 +27,6 @@ const config: SocketIoConfig = { url: 'http://localhost:8988', options: {} };
     AppRoutingModule,
     ReactiveFormsModule,
     FormsModule,
-    SocketIoModule.forRoot(config)
   ],
   providers: [],
   bootstrap: [AppComponent]
